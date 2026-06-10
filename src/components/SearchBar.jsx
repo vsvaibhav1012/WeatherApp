@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { FaSearch } from 'react-icons/fa';
+import React, { useState, useEffect, useRef } from 'react';
 
 const SearchBar = ({ onSearch }) => {
   const [city, setCity] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const inputRef = useRef(null);
+  const wrapperRef = useRef(null);
 
   useEffect(() => {
     const fetchSuggestions = async () => {
@@ -13,37 +14,37 @@ const SearchBar = ({ onSearch }) => {
         setSuggestions([]);
         return;
       }
-
       setIsLoading(true);
       try {
-        // You'll need to replace this URL with your actual API endpoint
-        // This endpoint should connect to your backend which handles OpenWeather API calls
         const response = await fetch(`/api/city-suggestions?q=${encodeURIComponent(city)}`);
-        
         if (response.ok) {
           const data = await response.json();
           setSuggestions(data);
         } else {
-          console.error('Failed to fetch suggestions');
           setSuggestions([]);
         }
-      } catch (error) {
-        console.error('Error fetching suggestions:', error);
+      } catch {
         setSuggestions([]);
       } finally {
         setIsLoading(false);
       }
     };
 
-    // Debounce the API call to prevent excessive requests
     const timer = setTimeout(() => {
-      if (city.trim()) {
-        fetchSuggestions();
-      }
+      if (city.trim()) fetchSuggestions();
     }, 300);
-
     return () => clearTimeout(timer);
   }, [city]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -55,54 +56,52 @@ const SearchBar = ({ onSearch }) => {
   };
 
   const handleSuggestionClick = (suggestion) => {
-    setCity(suggestion.name);
     onSearch(suggestion.name);
+    setCity('');
     setShowSuggestions(false);
   };
 
+  const hasSuggestions = showSuggestions && city.length >= 2;
+
   return (
-    <div className="relative w-full max-w-md mx-auto mb-6">
-      <form onSubmit={handleSubmit} className="flex items-center w-full">
-        <div className="relative w-full">
-          <input
-            type="text"
-            placeholder="Search for a city..."
-            className="w-full py-3 pl-4 pr-12 text-sm text-gray-700 bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-            value={city}
-            onChange={(e) => {
-              setCity(e.target.value);
-              setShowSuggestions(true);
-            }}
-            onFocus={() => setShowSuggestions(true)}
-          />
-          <button
-            type="submit"
-            className="absolute inset-y-0 right-0 flex items-center justify-center w-12 text-white bg-blue-500 rounded-r-lg hover:bg-blue-600"
-          >
-            <FaSearch />
-          </button>
-        </div>
+    <div className="search-wrapper" ref={wrapperRef}>
+      <form className="search-form" onSubmit={handleSubmit}>
+        <span className="search-prompt">›</span>
+        <input
+          ref={inputRef}
+          type="text"
+          className="search-input"
+          placeholder="city name..."
+          value={city}
+          onChange={(e) => {
+            setCity(e.target.value);
+            setShowSuggestions(true);
+          }}
+          onFocus={() => setShowSuggestions(true)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <button type="submit" className="search-btn">run</button>
       </form>
 
-      {showSuggestions && city.length >= 2 && (
-        <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg">
+      {hasSuggestions && (
+        <div className="suggestions-list">
           {isLoading ? (
-            <div className="p-3 text-center text-gray-500">Loading suggestions...</div>
+            <div className="suggestions-empty">loading...</div>
           ) : suggestions.length > 0 ? (
-            <ul>
-              {suggestions.map((suggestion, index) => (
-                <li
-                  key={`${suggestion.name}-${suggestion.country}-${index}`}
-                  className="px-4 py-2 cursor-pointer hover:bg-blue-50"
-                  onClick={() => handleSuggestionClick(suggestion)}
-                >
-                  {suggestion.name}, {suggestion.country}
-                </li>
-              ))}
-            </ul>
-          ) : city.length >= 2 ? (
-            <div className="p-3 text-center text-gray-500">No cities found</div>
-          ) : null}
+            suggestions.map((s, i) => (
+              <div
+                key={`${s.name}-${s.country}-${i}`}
+                className="suggestion-item"
+                onMouseDown={() => handleSuggestionClick(s)}
+              >
+                <span>{s.name}</span>
+                <span className="suggestion-country">{s.country}</span>
+              </div>
+            ))
+          ) : (
+            <div className="suggestions-empty">no results</div>
+          )}
         </div>
       )}
     </div>

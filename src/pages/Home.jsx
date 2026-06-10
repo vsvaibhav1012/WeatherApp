@@ -2,43 +2,46 @@ import React, { useState, useEffect } from 'react';
 import SearchBar from '../components/SearchBar';
 import WeatherCard from '../components/WeatherCard';
 import { fetchCurrentWeather } from '../api/weatherAPI';
-import { FaCloudSun } from 'react-icons/fa';
 
 const Home = () => {
   const [weatherData, setWeatherData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastSearched, setLastSearched] = useState('');
+  const [spinFrame, setSpinFrame] = useState(0);
 
-  // Load last searched city from localStorage on component mount
+  const spinFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
   useEffect(() => {
     const savedCity = localStorage.getItem('lastSearchedCity');
     if (savedCity) {
       handleSearch(savedCity);
-      setLastSearched(savedCity);
     }
   }, []);
+
+  useEffect(() => {
+    if (!loading) return;
+    const t = setInterval(() => setSpinFrame(f => (f + 1) % spinFrames.length), 80);
+    return () => clearInterval(t);
+  }, [loading]);
 
   const handleSearch = async (city) => {
     setLoading(true);
     setError(null);
-    
     try {
       const data = await fetchCurrentWeather(city);
       setWeatherData(data);
       setLastSearched(city);
-      
-      // Save to localStorage
       localStorage.setItem('lastSearchedCity', city);
     } catch (err) {
-      console.error('Error fetching weather data:', err);
-      
-      if (err.response && err.response.status === 404) {
-        setError('City not found. Please try another location.');
+      const status = err.response?.status;
+      if (status === 404) {
+        setError(`"${city}" not found`);
+      } else if (status === 401) {
+        setError('invalid API key — check REACT_APP_WEATHER_API_KEY in .env');
       } else {
-        setError('Failed to fetch weather data. Please try again later.');
+        setError('failed to fetch — try again later');
       }
-      
       setWeatherData(null);
     } finally {
       setLoading(false);
@@ -46,50 +49,64 @@ const Home = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        {/* App Header */}
-        <div className="flex items-center justify-center mb-8">
-          <FaCloudSun className="text-4xl text-blue-500 mr-2" />
-          <h1 className="text-3xl font-bold text-gray-800">Weather Dashboard</h1>
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="header-path">
+          <span>~</span>
+          <span className="path-sep">/</span>
+          <span className="path-current">weather</span>
         </div>
-        
-        {/* Search Bar */}
+        <div className="header-status">
+          <span className="status-dot" />
+          <span>live</span>
+        </div>
+      </header>
+
+      <main>
+        <div className="title-block">
+          <h1 className="app-title">
+            <span className="t-accent">W</span>eather
+          </h1>
+          <p className="app-sub">current conditions</p>
+        </div>
+
         <SearchBar onSearch={handleSearch} />
-        
-        {/* Status Messages */}
+
         {loading && (
-          <div className="text-center py-4">
-            <p>Loading weather data...</p>
+          <div className="status-line">
+            <span>{spinFrames[spinFrame]}</span>
+            <span>fetching weather data...</span>
           </div>
         )}
-        
+
         {error && (
-          <div className="text-center py-4 text-red-500">
-            <p>{error}</p>
+          <div className="error-line">
+            <span>✗</span>
+            <span>{error}</span>
           </div>
         )}
-        
-        {/* Weather Data */}
-        {weatherData && <WeatherCard weatherData={weatherData} />}
-        
-        {/* Initial State */}
+
+        {weatherData && !loading && (
+          <WeatherCard weatherData={weatherData} />
+        )}
+
         {!loading && !weatherData && !error && (
-          <div className="text-center py-12">
-            <FaCloudSun className="text-6xl text-blue-400 mx-auto mb-4" />
-            <p className="text-gray-600">
-              Search for a city to see the current weather conditions.
-            </p>
+          <div className="empty-state">
+            <div className="empty-glyph">◎</div>
+            <p className="empty-text">enter a city name above</p>
+            <p className="empty-hint">try "tokyo", "new york", or "london"</p>
           </div>
         )}
-        
-        {/* Last Searched */}
-        {lastSearched && (
-          <div className="text-center mt-6 text-sm text-gray-500">
-            <p>Last searched: {lastSearched}</p>
-          </div>
-        )}
-      </div>
+      </main>
+
+      {lastSearched && (
+        <footer className="app-footer">
+          <span className="footer-last">
+            last searched: <span className="footer-city">{lastSearched.toLowerCase()}</span>
+          </span>
+          <span>openweathermap</span>
+        </footer>
+      )}
     </div>
   );
 };
