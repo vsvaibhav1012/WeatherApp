@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { FaSearch, FaWind, FaThermometerHalf, FaTint, FaCompass, FaCloudSun } from 'react-icons/fa';
 
@@ -14,6 +14,50 @@ function App() {
   const API_KEY = process.env.REACT_APP_WEATHER_API_KEY;
   const BASE_URL = 'https://api.openweathermap.org/data/2.5';
 
+  // Fetch weather data
+  const handleSearch = useCallback(async (searchCity) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const weatherResponse = await axios.get(`${BASE_URL}/weather`, {
+        params: {
+          q: searchCity,
+          appid: API_KEY,
+          units: 'metric'
+        }
+      });
+
+      const forecastResponse = await axios.get(`${BASE_URL}/forecast`, {
+        params: {
+          q: searchCity,
+          appid: API_KEY,
+          units: 'metric'
+        }
+      });
+
+      setWeatherData(weatherResponse.data);
+      setForecastData(forecastResponse.data);
+      setLastSearched(searchCity);
+      setCity('');
+
+      localStorage.setItem('lastSearchedCity', searchCity);
+    } catch (err) {
+      console.error('Error fetching weather data:', err);
+
+      if (err.response && err.response.status === 404) {
+        setError('City not found. Please try another location.');
+      } else {
+        setError('Failed to fetch weather data. Please try again later.');
+      }
+
+      setWeatherData(null);
+      setForecastData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [API_KEY, BASE_URL]);
+
   // Load last searched city from localStorage on component mount
   useEffect(() => {
     const savedCity = localStorage.getItem('lastSearchedCity');
@@ -21,7 +65,7 @@ function App() {
       handleSearch(savedCity);
       setLastSearched(savedCity);
     }
-  }, []);
+  }, [handleSearch]);
 
   // Format date
   const formatDate = (timestamp) => {
@@ -50,28 +94,25 @@ function App() {
   // Get daily high and low temperatures from forecast data
   const getDailyHighLow = (forecastList) => {
     if (!forecastList || forecastList.length === 0) return { high: null, low: null };
-    
-    // Get today's date as YYYY-MM-DD to filter forecast entries for today
+
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
-    
-    // Filter forecast entries for today
+
     const todayForecasts = forecastList.filter(item => {
       const itemDate = new Date(item.dt * 1000);
       return itemDate.toISOString().split('T')[0] === todayStr;
     });
-    
+
     if (todayForecasts.length === 0) return { high: null, low: null };
-    
-    // Find min and max temperatures
+
     let high = -Infinity;
     let low = Infinity;
-    
+
     todayForecasts.forEach(item => {
       if (item.main.temp > high) high = item.main.temp;
       if (item.main.temp < low) low = item.main.temp;
     });
-    
+
     return {
       high: high !== -Infinity ? high : null,
       low: low !== Infinity ? low : null
@@ -83,53 +124,6 @@ function App() {
     e.preventDefault();
     if (city.trim()) {
       handleSearch(city.trim());
-    }
-  };
-
-  // Fetch weather data
-  const handleSearch = async (searchCity) => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      // Fetch current weather
-      const weatherResponse = await axios.get(`${BASE_URL}/weather`, {
-        params: {
-          q: searchCity,
-          appid: API_KEY,
-          units: 'metric'
-        }
-      });
-      
-      // Fetch forecast for better high/low temps
-      const forecastResponse = await axios.get(`${BASE_URL}/forecast`, {
-        params: {
-          q: searchCity,
-          appid: API_KEY,
-          units: 'metric'
-        }
-      });
-      
-      setWeatherData(weatherResponse.data);
-      setForecastData(forecastResponse.data);
-      setLastSearched(searchCity);
-      setCity('');
-      
-      // Save to localStorage
-      localStorage.setItem('lastSearchedCity', searchCity);
-    } catch (err) {
-      console.error('Error fetching weather data:', err);
-      
-      if (err.response && err.response.status === 404) {
-        setError('City not found. Please try another location.');
-      } else {
-        setError('Failed to fetch weather data. Please try again later.');
-      }
-      
-      setWeatherData(null);
-      setForecastData(null);
-    } finally {
-      setLoading(false);
     }
   };
 
